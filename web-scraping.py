@@ -5,8 +5,9 @@ import zipfile
 
 url = 'https://www.gov.br/ans/pt-br/acesso-a-informacao/participacao-da-sociedade/atualizacao-do-rol-de-procedimentos'
 
-requisicao = requests.get(url)
+requisicao = requests.get(url, timeout=10)
 html = BeautifulSoup(requisicao.text, 'html.parser')
+
 links = html.find_all('a')
 
 links_pdf = []
@@ -19,29 +20,36 @@ for link in links:
             print(f'Link encontrado: {href}')
 
 pasta_download = 'arquivos_ans'
-if not os.path.exists(pasta_download):
-    os.mkdir(pasta_download)
+os.makedirs(pasta_download, exist_ok=True)
 
 pdfs_baixados = []
 
 for link_pdf in links_pdf:
-    nome_arquivo = os.path.join(pasta_download, link_pdf.split('/')[-1])
+    nome_arquivo = os.path.join(pasta_download, os.path.basename(link_pdf))
+
+    if os.path.exists(nome_arquivo):
+        print(f'Arquivo já existe, pulando download: {nome_arquivo}')
+        pdfs_baixados.append(nome_arquivo)
+        continue
 
     try:
-        resposta_pdf = requests.get(link_pdf)
+        resposta_pdf = requests.get(link_pdf, timeout=10, stream=True)
 
-        with open(nome_arquivo, 'wb') as arquivo:
-            arquivo.write(resposta_pdf.content)
+        if resposta_pdf.status_code == 200:
+            with open(nome_arquivo, 'wb') as arquivo:
+                arquivo.write(resposta_pdf.content)
 
-        pdfs_baixados.append(nome_arquivo)
-        print(f'Download concluído: {nome_arquivo}')
+            pdfs_baixados.append(nome_arquivo)
+            print(f'Download concluído: {nome_arquivo}')
+        
+        else: 
+            print(f'Erro ao baixar {link_pdf}: Código {resposta_pdf.status_code}')
 
     except Exception as erro:
         print(f'Erro ao baixar {link_pdf}: {erro}')
 
 if pdfs_baixados:
-    pasta_raiz = os.getcwd()
-    caminho_zip = os.path.join(pasta_raiz, 'arquivos_ans.zip')
+    caminho_zip = os.path.join(os.getcwd(), 'arquivos_ans.zip')
 
     with zipfile.ZipFile(caminho_zip, 'w') as arquivo_zip:
         for pdf in pdfs_baixados:
